@@ -14,72 +14,67 @@ import "bytes"
 import "encoding/gob"
 import "fmt"
 
-
 // Encoder Factory external API.
 
 // MakeGobEncoderFactory - Make a Gob encoder factory.
 func MakeGobEncoderFactory() EncoderFactory {
-    var factory gobEncoderFactory
-    return &factory
+	var factory gobEncoderFactory
+	return &factory
 }
-
 
 // Make - Make a new Gob encoder that sits on top of the given byte connection.
 func (me *gobEncoderFactory) Make(connection ByteConnection) Encoder {
-    framer := makePreLengthFramer(connection)
-    encoder := makeGobEncoder(framer)
-    return encoder
+	framer := makePreLengthFramer(connection)
+	encoder := makeGobEncoder(framer)
+	return encoder
 }
-
 
 // Encoder external API.
 
 // Send - Encode the given message and send it.
 func (me *gobEncoder) Send(messageID uint8, data interface{}) error {
-    // First build the packet to send.
-    var buf bytes.Buffer
-    buf.WriteByte(byte(messageID))
+	// First build the packet to send.
+	var buf bytes.Buffer
+	buf.WriteByte(byte(messageID))
 
-    if data != nil {
-        enc := gob.NewEncoder(&buf)
-        err := enc.Encode(data)
-        if err != nil {
-            return fmt.Errorf("Could not encode TCP message, %v", err)
-        }
-    }
+	if data != nil {
+		enc := gob.NewEncoder(&buf)
+		err := enc.Encode(data)
+		if err != nil {
+			return fmt.Errorf("Could not encode TCP message, %v", err)
+		}
+	}
 
-    // Now send the packet.
-    return me.framer.Send(buf.Bytes())
+	// Now send the packet.
+	return me.framer.Send(buf.Bytes())
 }
-
 
 // Receive - Blocking call to receive, and decode, the next message.
 func (me *gobEncoder) Receive() (ReceivedMessage, error) {
-    // First get the next frame.
-    messageBytes, err := me.framer.Receive()
-    if err != nil { return nil, err }
+	// First get the next frame.
+	messageBytes, err := me.framer.Receive()
+	if err != nil {
+		return nil, err
+	}
 
-    // We know the command ID, look it up to find the expected data type.
-    id := uint8(messageBytes[0])
-    return makeGobReceivedMessage(id, messageBytes[1:]), nil
+	// We know the command ID, look it up to find the expected data type.
+	id := uint8(messageBytes[0])
+	return makeGobReceivedMessage(id, messageBytes[1:]), nil
 }
-
 
 // Received message external API.
 
 // ID - Report our message ID.
 func (me *gobReceivedMessage) ID() uint8 {
-    return me.id
+	return me.id
 }
-
 
 // Data - Unpack the message data into the given struct of the appropriate type.
 func (me *gobReceivedMessage) Data(data interface{}) {
-    buf := bytes.NewBuffer(me.messageBytes)
-    dec := gob.NewDecoder(buf)
-    dec.Decode(data) // XXX err
+	buf := bytes.NewBuffer(me.messageBytes)
+	dec := gob.NewDecoder(buf)
+	dec.Decode(data) // XXX err
 }
-
 
 // Internals.
 
@@ -89,31 +84,26 @@ type gobEncoderFactory struct {
 
 // gobEncoder - An encoder that packs everything in Gob.
 type gobEncoder struct {
-    framer Framer
-
+	framer Framer
 }
 
 // gobReceivedMessage - A message received by a Gob encoder.
 type gobReceivedMessage struct {
-    id uint8
-    messageBytes []byte
+	id           uint8
+	messageBytes []byte
 }
-
-
 
 // makeGobEncoder - Make a Gob encoder that sits on top of the given framer.
 func makeGobEncoder(framer Framer) *gobEncoder {
-    var encoder gobEncoder
-    encoder.framer = framer
-    return &encoder
+	var encoder gobEncoder
+	encoder.framer = framer
+	return &encoder
 }
-
 
 //makeGobReceviedMessage - Make a Gob received message.
 func makeGobReceivedMessage(id uint8, messageBytes []byte) *gobReceivedMessage {
-    var j gobReceivedMessage
-    j.id = id
-    j.messageBytes = messageBytes
-    return &j
+	var j gobReceivedMessage
+	j.id = id
+	j.messageBytes = messageBytes
+	return &j
 }
-

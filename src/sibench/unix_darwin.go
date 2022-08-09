@@ -10,7 +10,6 @@ import "os/exec"
 import "runtime"
 import "syscall"
 
-
 func Open(path string, mode int, perm uint32) (FileDescriptor, error) {
 	fd, err := syscall.Open(path, mode|syscall.O_SYNC, perm)
 	if err != nil {
@@ -27,7 +26,6 @@ func Open(path string, mode int, perm uint32) (FileDescriptor, error) {
 	return FileDescriptor(fd), nil
 }
 
-
 func Mount(source string, target string, fstype string, flags uintptr, data string) error {
 	var out bytes.Buffer
 
@@ -42,21 +40,18 @@ func Mount(source string, target string, fstype string, flags uintptr, data stri
 	return nil
 }
 
-
 func NewRadosConnection(target string, protocol ProtocolConfig, worker WorkerConnectionConfig) (Connection, error) {
 	return nil, fmt.Errorf("rados not implemented on %q", runtime.GOOS)
 }
-
 
 func NewRbdConnection(target string, protocol ProtocolConfig, worker WorkerConnectionConfig) (Connection, error) {
 	return nil, fmt.Errorf("rbd not implemented on %q", runtime.GOOS)
 }
 
-
 /*
  * Returns the number of bytes of physical memory in the system, or 0 if we are unable to determine it.
  */
 func GetPhysicalMemorySize() uint64 {
-    // XXX Need to work this out on a Mac!
-    return 0
+	// XXX Need to work this out on a Mac!
+	return 0
 }

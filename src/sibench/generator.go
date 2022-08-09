@@ -5,48 +5,47 @@ package main
 
 import "fmt"
 
-
-/* 
+/*
  * Generators create the contents for Objects writes, and can verify the contents
  * from object reads.
  *
- * Generators should be written so that the data returned by a connection read can 
+ * Generators should be written so that the data returned by a connection read can
  * be verified WITHOUT storing the expected data in memory for comparison.  Typically
  * this means that the data should be generated algorithmically from a seed written
  * into (or derivable from) the header of the object.
  */
 type Generator interface {
-    /* 
-     * Generate creates a payload for an object.
-     *
-     * size is the size of the payload in bytes.
-     * id is the object's ID.
-     * cycle is a counter that should be incremented if overwriting an object, so that the contents will not be the same as before. 
-     * buffer is the buffer into which we will write the object.  It must be of size 'size'.
-     */
-    Generate(size uint64, id uint64, cycle uint64, buffer *[]byte)
+	/*
+	 * Generate creates a payload for an object.
+	 *
+	 * size is the size of the payload in bytes.
+	 * id is the object's ID.
+	 * cycle is a counter that should be incremented if overwriting an object, so that the contents will not be the same as before.
+	 * buffer is the buffer into which we will write the object.  It must be of size 'size'.
+	 */
+	Generate(size uint64, id uint64, cycle uint64, buffer *[]byte)
 
-    /*
-     * Verify checks if the contents of a payload are well-formed.
-     *
-     * size is the size of the payload in bytes.
-     * buffer is the actual contents of the object.
-     * Scratch is a scratch buffer, and should be of size 'size'.
-     * Returns nil on success, or an error on failure.
-     */
-    Verify(size uint64, id uint64, buffer *[]byte, scratch *[]byte) error
+	/*
+	 * Verify checks if the contents of a payload are well-formed.
+	 *
+	 * size is the size of the payload in bytes.
+	 * buffer is the actual contents of the object.
+	 * Scratch is a scratch buffer, and should be of size 'size'.
+	 * Returns nil on success, or an error on failure.
+	 */
+	Verify(size uint64, id uint64, buffer *[]byte, scratch *[]byte) error
 }
 
-
-/* 
+/*
  * Factory function that mints new generators.
  */
 func CreateGenerator(generatorType string, seed uint64, config GeneratorConfig) (Generator, error) {
-    switch generatorType {
-        case "prng": return CreatePrngGenerator(seed, config)
-        case "slice": return CreateSliceGenerator(seed, config)
-    }
+	switch generatorType {
+	case "prng":
+		return CreatePrngGenerator(seed, config)
+	case "slice":
+		return CreateSliceGenerator(seed, config)
+	}
 
-    return nil, fmt.Errorf("Unknown generatorType: %v", generatorType)
+	return nil, fmt.Errorf("Unknown generatorType: %v", generatorType)
 }
-

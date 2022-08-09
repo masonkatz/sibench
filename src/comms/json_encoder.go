@@ -27,79 +27,76 @@ package comms
 import "encoding/json"
 import "fmt"
 
-
 // Encoder Factory external API.
 
 // MakeJSONEncoderFactory - Make a JSON encoder factory.
 func MakeJSONEncoderFactory() EncoderFactory {
-    var factory jsonEncoderFactory
-    return &factory
+	var factory jsonEncoderFactory
+	return &factory
 }
-
 
 // Make - Make a new JSON encoder that sits on top of the given byte connection.
 func (me *jsonEncoderFactory) Make(connection ByteConnection) Encoder {
-    framer := makePreLengthFramer(connection)
-    encoder := makeJSONEncoder(framer)
-    return encoder
+	framer := makePreLengthFramer(connection)
+	encoder := makeJSONEncoder(framer)
+	return encoder
 }
-
 
 // Encoder external API.
 
 // Send - Encode the given message and send it.
 func (me *jsonEncoder) Send(messageID uint8, data interface{}) error {
-    // First build the packet to send.
-    var message TCPMessageFmt
-    message.ID = messageID
-    message.Data = data
+	// First build the packet to send.
+	var message TCPMessageFmt
+	message.ID = messageID
+	message.Data = data
 
-    dataBytes, err := json.Marshal(&message)
-    if err != nil { return fmt.Errorf("Could not encode TCP message, %v", err) }
+	dataBytes, err := json.Marshal(&message)
+	if err != nil {
+		return fmt.Errorf("Could not encode TCP message, %v", err)
+	}
 
-    // Now send the packet.
-    return me.framer.Send(dataBytes)
+	// Now send the packet.
+	return me.framer.Send(dataBytes)
 }
-
 
 // Receive - Blocking call to receive, and decode, the next message.
 func (me *jsonEncoder) Receive() (ReceivedMessage, error) {
-    // First get the next frame.
-    messageBytes, err := me.framer.Receive()
+	// First get the next frame.
+	messageBytes, err := me.framer.Receive()
 
-    if err != nil { return nil, err }  // Propagate error.
+	if err != nil {
+		return nil, err
+	} // Propagate error.
 
-    // Parse the JSON to see what message it is.
-    // We only need the ID, but we parse the whole thing to ensure it's all valid JSON.
-    var header TCPMessageFmt
-    err = json.Unmarshal(messageBytes, &header)
-    if err != nil {
-        return nil, fmt.Errorf("Error processing received message, %v", err)
-    }
+	// Parse the JSON to see what message it is.
+	// We only need the ID, but we parse the whole thing to ensure it's all valid JSON.
+	var header TCPMessageFmt
+	err = json.Unmarshal(messageBytes, &header)
+	if err != nil {
+		return nil, fmt.Errorf("Error processing received message, %v", err)
+	}
 
-    id := header.ID
-    return makeJSONReceivedMessage(id, messageBytes), nil
+	id := header.ID
+	return makeJSONReceivedMessage(id, messageBytes), nil
 }
-
 
 // Received message external API.
 
 // ID - Report our message ID.
 func (me *jsonReceivedMessage) ID() uint8 {
-    return me.id
+	return me.id
 }
-
 
 // Data - Unpack the message data into the given struct of the appropriate type.
 func (me *jsonReceivedMessage) Data(data interface{}) {
-    // Now we have the concrete type of the data we can fully decode the message.
-    var message TCPMessageFmt
-    message.Data = data
+	// Now we have the concrete type of the data we can fully decode the message.
+	var message TCPMessageFmt
+	message.Data = data
 
-    // We've already fully parsed this, so it shouldn't be able to return an error.
-    json.Unmarshal(me.messageBytes, &message)
+	// We've already fully parsed this, so it shouldn't be able to return an error.
+	json.Unmarshal(me.messageBytes, &message)
 }
-
 
 // Internals.
 
@@ -109,29 +106,26 @@ type jsonEncoderFactory struct {
 
 // jsonEncoder - An encoder that packs everything in JSON.
 type jsonEncoder struct {
-    framer Framer
+	framer Framer
 }
 
 // jsonReceivedMessage - A message received by a JSON encoder.
 type jsonReceivedMessage struct {
-    id uint8
-    messageBytes []byte
+	id           uint8
+	messageBytes []byte
 }
-
 
 // makeJSONEncoder - Make a JSON encoder that sits on top of the given framer.
 func makeJSONEncoder(framer Framer) *jsonEncoder {
-    var encoder jsonEncoder
-    encoder.framer = framer
-    return &encoder
+	var encoder jsonEncoder
+	encoder.framer = framer
+	return &encoder
 }
-
 
 //makeJSONReceviedMessage - Make a JSON received message.
 func makeJSONReceivedMessage(id uint8, messageBytes []byte) *jsonReceivedMessage {
-    var j jsonReceivedMessage
-    j.id = id
-    j.messageBytes = messageBytes
-    return &j
+	var j jsonReceivedMessage
+	j.id = id
+	j.messageBytes = messageBytes
+	return &j
 }
-

@@ -8,8 +8,6 @@ import "io"
 import "logger"
 import "syscall"
 
-
-
 /**
  * BlockConnection is for testing generic block performance.
  *
@@ -19,119 +17,109 @@ import "syscall"
  * kernel driver, but you'll get better functionality using Ceph's RBD go package).
  */
 type BlockConnection struct {
-    device string
-    protocol ProtocolConfig
-    worker WorkerConnectionConfig
+	device   string
+	protocol ProtocolConfig
+	worker   WorkerConnectionConfig
 
-    /* either a unix file descriptor int or a windows Handle. */
-    fd FileDescriptor
+	/* either a unix file descriptor int or a windows Handle. */
+	fd FileDescriptor
 }
-
 
 func NewBlockConnection(target string, protocol ProtocolConfig, worker WorkerConnectionConfig) (*BlockConnection, error) {
-    var conn BlockConnection
-    conn.device = target
-    conn.protocol = protocol
-    conn.worker = worker
-    return &conn, nil
+	var conn BlockConnection
+	conn.device = target
+	conn.protocol = protocol
+	conn.worker = worker
+	return &conn, nil
 }
-
 
 func (conn *BlockConnection) Target() string {
-    return conn.device
+	return conn.device
 }
-
 
 func (conn *BlockConnection) ManagerConnect() error {
-    return nil
+	return nil
 }
-
 
 func (conn *BlockConnection) ManagerClose() error {
-    return nil
+	return nil
 }
-
 
 func (conn *BlockConnection) WorkerConnect() error {
-    var err error
+	var err error
 
-    conn.fd, err = Open(conn.device, syscall.O_RDWR, 0644)
-    if err != nil {
-        conn.fd = 0
-        return err
-    }
+	conn.fd, err = Open(conn.device, syscall.O_RDWR, 0644)
+	if err != nil {
+		conn.fd = 0
+		return err
+	}
 
-    offset, err := conn.fd.Seek(0, io.SeekEnd)
-    if err != nil {
-        return err
-    }
+	offset, err := conn.fd.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
 
-    minSize := (conn.worker.ForemanRangeEnd - conn.worker.ForemanRangeStart) * conn.worker.ObjectSize
-    if offset < int64(minSize) {
-        return fmt.Errorf("Block device %v too small: only %v bytes when we need %v", conn.device, offset, minSize)
-    }
+	minSize := (conn.worker.ForemanRangeEnd - conn.worker.ForemanRangeStart) * conn.worker.ObjectSize
+	if offset < int64(minSize) {
+		return fmt.Errorf("Block device %v too small: only %v bytes when we need %v", conn.device, offset, minSize)
+	}
 
-    return nil
+	return nil
 }
-
 
 func (conn *BlockConnection) WorkerClose() error {
-    return conn.fd.Close()
+	return conn.fd.Close()
 }
 
-
-/* 
- * Helper function to determine an object's offset into the image from an object key 
+/*
+ * Helper function to determine an object's offset into the image from an object key
  */
 func (conn *BlockConnection) objectOffset(id uint64) int64 {
-    return int64((id - conn.worker.ForemanRangeStart) * conn.worker.ObjectSize)
+	return int64((id - conn.worker.ForemanRangeStart) * conn.worker.ObjectSize)
 }
-
 
 func (conn *BlockConnection) PutObject(key string, id uint64, buffer []byte) error {
-    offset := conn.objectOffset(id)
-    logger.Tracef("Put block object %v on %v with size %v and offset %v\n", id, conn.device, len(buffer), offset)
+	offset := conn.objectOffset(id)
+	logger.Tracef("Put block object %v on %v with size %v and offset %v\n", id, conn.device, len(buffer), offset)
 
-    for len(buffer) > 0 {
-        n, err := conn.fd.Pwrite(buffer, offset)
-        if err == nil {
-            return err
-        }
+	for len(buffer) > 0 {
+		n, err := conn.fd.Pwrite(buffer, offset)
+		if err == nil {
+			return err
+		}
 
-        buffer = buffer[n:]
-        offset += int64(n)
-    }
+		buffer = buffer[n:]
+		offset += int64(n)
+	}
 
-    return nil
+	return nil
 }
-
 
 func (conn *BlockConnection) GetObject(key string, id uint64, buffer []byte) error {
-    offset := conn.objectOffset(id)
-    logger.Tracef("Get block object %v on %v with size %v and offset %v\n", key, conn.device, conn.worker.ObjectSize, offset)
+	offset := conn.objectOffset(id)
+	logger.Tracef("Get block object %v on %v with size %v and offset %v\n", key, conn.device, conn.worker.ObjectSize, offset)
 
-    remaining := conn.worker.ObjectSize
-    start := 0
+	remaining := conn.worker.ObjectSize
+	start := 0
 
-    if remaining != uint64(cap(buffer)) {
-        return fmt.Errorf("Object has wrong size: expected %v, but got %v", cap(buffer), remaining)
-    }
+	if remaining != uint64(cap(buffer)) {
+		return fmt.Errorf("Object has wrong size: expected %v, but got %v", cap(buffer), remaining)
+	}
 
-    for remaining > 0 {
-        n, err := conn.fd.Pread(buffer[start:], offset)
-        if err != nil {
-            return err
-        }
+	for remaining > 0 {
+		n, err := conn.fd.Pread(buffer[start:], offset)
+		if err != nil {
+			return err
+		}
 
-        start += n
-        offset += int64(n)
-        remaining -= uint64(n)
-    }
+		start += n
+		offset += int64(n)
+		remaining -= uint64(n)
+	}
 
-    return nil
+	return nil
 }
 
-
 func (conn *BlockConnection) InvalidateCache() error {
-    return nil
+	return nil
 }

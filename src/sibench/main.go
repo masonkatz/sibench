@@ -16,78 +16,75 @@ import "strconv"
 import "time"
 import "runtime"
 
-
 /* Variables to be set by the link stage */
 var Version = "Development build"
 var BuildDate = "not set"
 
-
 /* Struct type into which DocOpt can put our command line options. */
 type Arguments struct {
-    // Command selection bools
-    Version bool
-    Server bool
-    S3 bool
-    Rados bool
-    Rbd bool
-    Cephfs bool
-    Block bool
-    File bool
-    Run bool
+	// Command selection bools
+	Version bool
+	Server  bool
+	S3      bool
+	Rados   bool
+	Rbd     bool
+	Cephfs  bool
+	Block   bool
+	File    bool
+	Run     bool
 
-    // Common options
-    Verbosity string
-    Port int
-    MountsDir string
-    ObjectSize string
-    ObjectCount int
-    Servers string
-    RunTime int
-    RampUp int
-    RampDown int
-    Bandwidth string
-    ReadWriteMix int
-    Output string
-    Targets []string
-    Workers float64
-    SkipReadVerification bool
-    UseBytes bool
+	// Common options
+	Verbosity            string
+	Port                 int
+	MountsDir            string
+	ObjectSize           string
+	ObjectCount          int
+	Servers              string
+	RunTime              int
+	RampUp               int
+	RampDown             int
+	Bandwidth            string
+	ReadWriteMix         int
+	Output               string
+	Targets              []string
+	Workers              float64
+	SkipReadVerification bool
+	UseBytes             bool
 
-    // S3 options
-    S3AccessKey string
-    S3SecretKey string
-    S3Bucket string
-    S3Port int
+	// S3 options
+	S3AccessKey string
+	S3SecretKey string
+	S3Bucket    string
+	S3Port      int
 
-    // Rados and/or CephFS options
-    CephPool     string
-    CephDatapool string
-    CephUser     string
-    CephKey      string
-    CephDir      string
+	// Rados and/or CephFS options
+	CephPool     string
+	CephDatapool string
+	CephUser     string
+	CephKey      string
+	CephDir      string
 
-    // Block options
-    BlockDevice string
+	// Block options
+	BlockDevice string
 
-    // File options
-    FileDir string
+	// File options
+	FileDir string
 
-    // Generator options
-    Generator string
-    SliceDir string
-    SliceSize int
-    SliceCount int
+	// Generator options
+	Generator  string
+	SliceDir   string
+	SliceSize  int
+	SliceCount int
 
-    // Synthesized options
-    Bucket string
-    BandwidthInBits uint64
-    ObjectSizeInBits uint64
+	// Synthesized options
+	Bucket           string
+	BandwidthInBits  uint64
+	ObjectSizeInBits uint64
 }
-
 
 /* Return a usage string for DocOpt argument parsing. */
 func usage() string {
-    s := `SoftIron Benchmark Tool.
+	s := `SoftIron Benchmark Tool.
 Usage:
   sibench version
   sibench server     [-v LEVEL] [-p PORT] [-m DIR]
@@ -97,8 +94,8 @@ Usage:
                      [--s3-port PORT] [--s3-bucket BUCKET] (--s3-access-key KEY) (--s3-secret-key KEY)
                      [--skip-read-verification] [--servers SERVERS] <targets> ...`
 
-    if runtime.GOOS == "linux" {
-        s += ` 
+	if runtime.GOOS == "linux" {
+		s += ` 
   sibench rados run  [-v LEVEL] [-p PORT] [-o FILE]
                      [-s SIZE] [-c COUNT] [-b BW] [-x MIX] [-r TIME] [-u TIME] [-d TIME] [-w FACTOR]
                      [-g GEN] [--slice-dir DIR] [--slice-count COUNT] [--slice-size BYTES] [--use-bytes]
@@ -114,9 +111,9 @@ Usage:
                      [-g GEN] [--slice-dir DIR] [--slice-count COUNT] [--slice-size BYTES] [--use-bytes]
                      [--ceph-pool POOL] [--ceph-datapool POOL] [--ceph-user USER] (--ceph-key KEY)
                      [--skip-read-verification] [--servers SERVERS] <targets> ...`
-    }
+	}
 
-    s += ` 
+	s += ` 
   sibench block run  [-v LEVEL] [-p PORT] [-o FILE]
                      [-s SIZE] [-c COUNT] [-b BW] [-x MIX] [-r TIME] [-u TIME] [-d TIME] [-w FACTOR]
                      [-g GEN] [--slice-dir DIR] [--slice-count COUNT] [--slice-size BYTES] [--use-bytes]
@@ -160,271 +157,265 @@ Options:
   --slice-count COUNT             The number of slices to construct for workload generation        [default: 10000]
   --slice-size BYTES              The size of each slice in bytes.                                 [default: 4096]
 `
-    return s
+	return s
 }
-
 
 /* Helper function to dump an object to string in a nice way */
 func prettyPrint(i interface{}) string {
-    j, err := json.MarshalIndent(i, "", "  ")
-    if err != nil {
-        return fmt.Sprintf("Error printing %v: %v", i, err)
-    }
+	j, err := json.MarshalIndent(i, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("Error printing %v: %v", i, err)
+	}
 
-    return string(j)
+	return string(j)
 }
-
 
 /*
  * Quit with an error message.
  */
 func die(format string, a ...interface{}) {
-    fmt.Printf(format, a)
-    os.Exit(-1)
+	fmt.Printf(format, a)
+	os.Exit(-1)
 }
 
-
-/* 
- * Helper to simplify our error handling.  
+/*
+ * Helper to simplify our error handling.
  * If err is not nil, then we print an error message and die (with a non-zero exit code).
  */
 func dieOnError(err error, format string, a ...interface{}) {
-    if err != nil {
-        fmt.Printf(format, a)
-        fmt.Printf(": %v\n", err)
-        os.Exit(-1)
-    }
+	if err != nil {
+		fmt.Printf(format, a)
+		fmt.Printf(": %v\n", err)
+		os.Exit(-1)
+	}
 }
 
-
-/* 
+/*
  * Convert a string with optional units into an uint, expanding the units.
  * The units accepted are [None] or K, M, G in either upper or lower case.
  *
  * Eg:  1->1, 1k->1024, 1m->1048576 etc.
  */
 func expandUnits(val string) (uint64, error) {
-    // A regex for converting numbers with optional units (in K, M or G) into long form.
-    re := regexp.MustCompile(`([0-9]+)([kKmMgG]?)$`)
+	// A regex for converting numbers with optional units (in K, M or G) into long form.
+	re := regexp.MustCompile(`([0-9]+)([kKmMgG]?)$`)
 
-    // Turn the size (in K, M or G) into bytes...
-    groups := re.FindStringSubmatch(val)
-    if groups == nil {
-        return 0, fmt.Errorf("Bad size specifier: %v", val)
-    }
+	// Turn the size (in K, M or G) into bytes...
+	groups := re.FindStringSubmatch(val)
+	if groups == nil {
+		return 0, fmt.Errorf("Bad size specifier: %v", val)
+	}
 
-    ival, _ := strconv.Atoi(groups[1])
-    uval := uint64(ival)
+	ival, _ := strconv.Atoi(groups[1])
+	uval := uint64(ival)
 
-    switch strings.ToLower(groups[2]) {
-        case "k": uval *= 1024
-        case "m": uval *= 1024 * 1024
-        case "g": uval *= 1024 * 1024 * 1024
-    }
+	switch strings.ToLower(groups[2]) {
+	case "k":
+		uval *= 1024
+	case "m":
+		uval *= 1024 * 1024
+	case "g":
+		uval *= 1024 * 1024 * 1024
+	}
 
-    return uval, nil
+	return uval, nil
 }
 
-
-/* 
- * Do any argument checking that can not be done inherently by DocOpt (such as 
+/*
+ * Do any argument checking that can not be done inherently by DocOpt (such as
  * ensuring a port number is < 65535, or that a string has a particular form.
  */
 func validateArguments(args *Arguments) error {
-    if (args.Port < 0) || ( args.Port > int(math.MaxUint16)) {
-        return fmt.Errorf("Port not in range: %v", args.Port)
-    }
+	if (args.Port < 0) || (args.Port > int(math.MaxUint16)) {
+		return fmt.Errorf("Port not in range: %v", args.Port)
+	}
 
-    if (args.S3Port < 0) || ( args.S3Port > int(math.MaxUint16)) {
-        return fmt.Errorf("S3 Port not in range: %v", args.S3Port)
-    }
+	if (args.S3Port < 0) || (args.S3Port > int(math.MaxUint16)) {
+		return fmt.Errorf("S3 Port not in range: %v", args.S3Port)
+	}
 
-    if (args.Workers < 0.1) {
-        args.Workers = 0.1
-    }
+	if args.Workers < 0.1 {
+		args.Workers = 0.1
+	}
 
-    var err error
-    args.ObjectSizeInBits, err = expandUnits(args.ObjectSize)
-    if err != nil {
-        return err
-    }
+	var err error
+	args.ObjectSizeInBits, err = expandUnits(args.ObjectSize)
+	if err != nil {
+		return err
+	}
 
-    args.BandwidthInBits, err = expandUnits(args.Bandwidth)
-    if err != nil {
-        return err
-    }
+	args.BandwidthInBits, err = expandUnits(args.Bandwidth)
+	if err != nil {
+		return err
+	}
 
-    args.BandwidthInBits /= 8
+	args.BandwidthInBits /= 8
 
-    switch args.Verbosity {
-        case "off":
-        case "debug": logger.SetLevel(logger.Debug)
-        case "trace": logger.SetLevel(logger.Trace)
-        default: return fmt.Errorf("Bad verbosity level: %v.  Should be one of off, debug or trace")
-    }
+	switch args.Verbosity {
+	case "off":
+	case "debug":
+		logger.SetLevel(logger.Debug)
+	case "trace":
+		logger.SetLevel(logger.Trace)
+	default:
+		return fmt.Errorf("Bad verbosity level: %v.  Should be one of off, debug or trace")
+	}
 
-    return nil
+	return nil
 }
-
 
 /*
  * Build our Config.
  *
- * Currently this uses just our command line arguments, but it will probably have the option to 
+ * Currently this uses just our command line arguments, but it will probably have the option to
  * load a json file later on.
  */
 func buildConfig(args *Arguments) error {
-    globalConfig.ListenPort = uint16(args.Port)
-    globalConfig.MountsDir = args.MountsDir
-    return nil
+	globalConfig.ListenPort = uint16(args.Port)
+	globalConfig.MountsDir = args.MountsDir
+	return nil
 }
-
 
 func main() {
-    // Error should never happen outside of development, since docopt is complaining that our usage string has bad syntax.
-    opts, err := docopt.ParseDoc(usage())
-    dieOnError(err, "Error parsing arguments")
+	// Error should never happen outside of development, since docopt is complaining that our usage string has bad syntax.
+	opts, err := docopt.ParseDoc(usage())
+	dieOnError(err, "Error parsing arguments")
 
-    // Error should never happen outside of development, since docopt is complaining that our type bindings are wrong.
-    var args Arguments
-    err = opts.Bind(&args)
-    dieOnError(err, "Failure binding arguments")
+	// Error should never happen outside of development, since docopt is complaining that our type bindings are wrong.
+	var args Arguments
+	err = opts.Bind(&args)
+	dieOnError(err, "Failure binding arguments")
 
-    // This can error on bad user input.
-    err = validateArguments(&args)
-    dieOnError(err, "Failure validating arguments")
+	// This can error on bad user input.
+	err = validateArguments(&args)
+	dieOnError(err, "Failure validating arguments")
 
-    // Build our config.  In the future, this may load json etc...
-    err = buildConfig(&args)
-    dieOnError(err, "Failure building config")
+	// Build our config.  In the future, this may load json etc...
+	err = buildConfig(&args)
+	dieOnError(err, "Failure building config")
 
-    if logger.IsDebug() {
-        fmt.Printf("%v\n", prettyPrint(args))
-    }
+	if logger.IsDebug() {
+		fmt.Printf("%v\n", prettyPrint(args))
+	}
 
-    switch {
-        case args.Version:
-            fmt.Printf("%v - %v\n", Version, BuildDate)
+	switch {
+	case args.Version:
+		fmt.Printf("%v - %v\n", Version, BuildDate)
 
-        case args.Server:
-            startServer(&args)
+	case args.Server:
+		startServer(&args)
 
-        case args.Run:
-            startRun(&args)
-    }
+	case args.Run:
+		startRun(&args)
+	}
 
-    logger.Infof("Done\n")
+	logger.Infof("Done\n")
 }
-
 
 /* Start a server, listening on a TCP port */
 func startServer(args *Arguments) {
 
-    err := StartForeman()
-    dieOnError(err, "Failure creating server")
+	err := StartForeman()
+	dieOnError(err, "Failure creating server")
 }
-
-
 
 /* Creates a random string which we can use to guarantee uniqueness across runs. */
 func createUniquePrefix() string {
-    source := rand.NewSource(time.Now().UnixNano())
-    prng := rand.New(source)
-    return fmt.Sprintf("sibench-%X", prng.Uint64())
+	source := rand.NewSource(time.Now().UnixNano())
+	prng := rand.New(source)
+	return fmt.Sprintf("sibench-%X", prng.Uint64())
 }
-
 
 /* Create a job and execute it on some set of servers. */
 func startRun(args *Arguments) {
-    var j Job
+	var j Job
 
-    j.arguments = args
+	j.arguments = args
 
-    j.servers = strings.Split(args.Servers, ",")
-    j.serverPort = uint16(args.Port)
-    j.runTime = uint64(args.RunTime)
-    j.rampUp = uint64(args.RampUp)
-    j.rampDown = uint64(args.RampDown)
-    j.useBytes = args.UseBytes
+	j.servers = strings.Split(args.Servers, ",")
+	j.serverPort = uint16(args.Port)
+	j.runTime = uint64(args.RunTime)
+	j.rampUp = uint64(args.RampUp)
+	j.rampDown = uint64(args.RampDown)
+	j.useBytes = args.UseBytes
 
-    j.order.JobId = 1
-    j.order.ObjectKeyPrefix = createUniquePrefix()
-    j.order.ObjectSize = args.ObjectSizeInBits
-    j.order.Seed = uint64(time.Now().Unix())
-    j.order.RangeStart = 0
-    j.order.RangeEnd = uint64(args.ObjectCount)
-    j.order.Targets = args.Targets
-    j.order.Bandwidth = args.BandwidthInBits
-    j.order.ReadWriteMix = uint64(args.ReadWriteMix)
-    j.order.WorkerFactor = args.Workers
-    j.order.SkipReadValidation = args.SkipReadVerification
-    j.order.GeneratorType = args.Generator
+	j.order.JobId = 1
+	j.order.ObjectKeyPrefix = createUniquePrefix()
+	j.order.ObjectSize = args.ObjectSizeInBits
+	j.order.Seed = uint64(time.Now().Unix())
+	j.order.RangeStart = 0
+	j.order.RangeEnd = uint64(args.ObjectCount)
+	j.order.Targets = args.Targets
+	j.order.Bandwidth = args.BandwidthInBits
+	j.order.ReadWriteMix = uint64(args.ReadWriteMix)
+	j.order.WorkerFactor = args.Workers
+	j.order.SkipReadValidation = args.SkipReadVerification
+	j.order.GeneratorType = args.Generator
 
-    if uint64(len(j.servers)) > j.order.RangeEnd {
-        logger.Infof("There are more servers than objects! We will only use %v for this run", j.order.RangeEnd)
-        j.servers = j.servers[0:j.order.RangeEnd]
-    }
+	if uint64(len(j.servers)) > j.order.RangeEnd {
+		logger.Infof("There are more servers than objects! We will only use %v for this run", j.order.RangeEnd)
+		j.servers = j.servers[0:j.order.RangeEnd]
+	}
 
-    // Determine our generator configuration.
-    switch args.Generator {
-        case "prng":
-            j.order.GeneratorConfig = GeneratorConfig {}
+	// Determine our generator configuration.
+	switch args.Generator {
+	case "prng":
+		j.order.GeneratorConfig = GeneratorConfig{}
 
-        case "slice":
-            j.order.GeneratorConfig = GeneratorConfig {
-                "dir": args.SliceDir,
-                "size": strconv.Itoa(int(args.SliceSize)),
-                "count": strconv.Itoa(int(args.SliceCount)) }
+	case "slice":
+		j.order.GeneratorConfig = GeneratorConfig{
+			"dir":   args.SliceDir,
+			"size":  strconv.Itoa(int(args.SliceSize)),
+			"count": strconv.Itoa(int(args.SliceCount))}
 
-        default:
-            die("Unknown generator type %v.  Expected one of [prng, slice]")
-    }
+	default:
+		die("Unknown generator type %v.  Expected one of [prng, slice]")
+	}
 
-    // Detemrine our protocol configuration
-    switch {
-        case args.S3:
-            j.order.ConnectionType = "s3"
-            j.order.ProtocolConfig = ProtocolConfig {
-                "access_key": args.S3AccessKey,
-                "secret_key": args.S3SecretKey,
-                "port": strconv.Itoa(args.S3Port),
-                "bucket": args.S3Bucket }
+	// Detemrine our protocol configuration
+	switch {
+	case args.S3:
+		j.order.ConnectionType = "s3"
+		j.order.ProtocolConfig = ProtocolConfig{
+			"access_key": args.S3AccessKey,
+			"secret_key": args.S3SecretKey,
+			"port":       strconv.Itoa(args.S3Port),
+			"bucket":     args.S3Bucket}
 
-        case args.Rados:
-            j.order.ConnectionType = "rados"
-            j.order.ProtocolConfig = ProtocolConfig {
-                "username": args.CephUser,
-                "key": args.CephKey,
-                "pool": args.CephPool }
+	case args.Rados:
+		j.order.ConnectionType = "rados"
+		j.order.ProtocolConfig = ProtocolConfig{
+			"username": args.CephUser,
+			"key":      args.CephKey,
+			"pool":     args.CephPool}
 
-        case args.Cephfs:
-            j.order.ConnectionType = "cephfs"
-            j.order.ProtocolConfig = ProtocolConfig {
-                "username": args.CephUser,
-                "key": args.CephKey,
-                "dir": args.CephDir }
+	case args.Cephfs:
+		j.order.ConnectionType = "cephfs"
+		j.order.ProtocolConfig = ProtocolConfig{
+			"username": args.CephUser,
+			"key":      args.CephKey,
+			"dir":      args.CephDir}
 
-        case args.Rbd:
-            j.order.ConnectionType = "rbd"
-            j.order.ProtocolConfig = ProtocolConfig {
-                "username": args.CephUser,
-                "key": args.CephKey,
-                "pool": args.CephPool,
-                "datapool": args.CephDatapool,
-                "image_prefix": createUniquePrefix() }
+	case args.Rbd:
+		j.order.ConnectionType = "rbd"
+		j.order.ProtocolConfig = ProtocolConfig{
+			"username":     args.CephUser,
+			"key":          args.CephKey,
+			"pool":         args.CephPool,
+			"datapool":     args.CephDatapool,
+			"image_prefix": createUniquePrefix()}
 
-        case args.Block:
-            j.order.ConnectionType = "block"
-            j.order.Targets = append(j.order.Targets, args.BlockDevice)
+	case args.Block:
+		j.order.ConnectionType = "block"
+		j.order.Targets = append(j.order.Targets, args.BlockDevice)
 
-        case args.File:
-            j.order.ConnectionType = "file"
-            j.order.Targets = append(j.order.Targets, args.FileDir)
+	case args.File:
+		j.order.ConnectionType = "file"
+		j.order.Targets = append(j.order.Targets, args.FileDir)
 
-        default:
-            die("No protocol specified")
-    }
+	default:
+		die("No protocol specified")
+	}
 
-    RunBenchmark(&j)
+	RunBenchmark(&j)
 }
-

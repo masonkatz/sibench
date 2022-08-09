@@ -13,7 +13,6 @@ import "os"
 import "path"
 import "strconv"
 
-
 /*
  * SliceGenerator is a generator which builds workloads from existing files.  It aims to reproduce
  * the compressibility characteristics of those files, whilst still creating an effectively infinitei
@@ -31,155 +30,143 @@ import "strconv"
  *   4.  Use that prng to select slices from our library, which are concatenated onto the object
  *       until we have as many bytes as we were asked for.
  *
- * This approach means that we do not need to ever store the objects themselves: we can verify a 
+ * This approach means that we do not need to ever store the objects themselves: we can verify a
  * read operation by reading the seed from the first few bytes, and then recreating the object we
  * would expect.
  */
 type SliceGenerator struct {
-    prng *rand.Rand
-    sliceCount int
-    sliceSize int
-    slices [][]byte
+	prng       *rand.Rand
+	sliceCount int
+	sliceSize  int
+	slices     [][]byte
 }
 
-
-
 func CreateSliceGenerator(seed uint64, config GeneratorConfig) (*SliceGenerator, error) {
-    var sg SliceGenerator
+	var sg SliceGenerator
 
-    // No need to check for conversion errors here: these are the result of Itoa calls anyway.
-    sg.sliceSize, _ = strconv.Atoi(config["size"])
-    sg.sliceCount, _ = strconv.Atoi(config["count"])
-    sg.prng = rand.New(rand.NewSource(int64(seed)))
-    sg.slices = make([][]byte, sg.sliceCount)
+	// No need to check for conversion errors here: these are the result of Itoa calls anyway.
+	sg.sliceSize, _ = strconv.Atoi(config["size"])
+	sg.sliceCount, _ = strconv.Atoi(config["count"])
+	sg.prng = rand.New(rand.NewSource(int64(seed)))
+	sg.slices = make([][]byte, sg.sliceCount)
 
-    dirname := config["dir"]
+	dirname := config["dir"]
 	entries, err := os.ReadDir(dirname)
 
 	if err != nil {
-        return nil, fmt.Errorf("Unable to read slice directory %v: %v", dirname, err)
-    }
+		return nil, fmt.Errorf("Unable to read slice directory %v: %v", dirname, err)
+	}
 
-    /* Build a array of file info objects for all the regular files in our directory.
-     * Also, compute the total number of bytes in those files. */
+	/* Build a array of file info objects for all the regular files in our directory.
+	 * Also, compute the total number of bytes in those files. */
 
-    var totalBytes uint64 = 0
-    infos := make([]fs.FileInfo, 0)
+	var totalBytes uint64 = 0
+	infos := make([]fs.FileInfo, 0)
 
 	for _, e := range entries {
 		info, err := e.Info()
 		if err != nil {
-            return nil, fmt.Errorf("Unable to stat %v/%v: %v", dirname, e.Name(), err)
-        }
+			return nil, fmt.Errorf("Unable to stat %v/%v: %v", dirname, e.Name(), err)
+		}
 
-        if info.Mode().IsRegular() {
-            infos = append(infos, info)
-            totalBytes += uint64(info.Size())
-        }
+		if info.Mode().IsRegular() {
+			infos = append(infos, info)
+			totalBytes += uint64(info.Size())
+		}
 	}
 
-    /* If our total number of bytes is less than our requested slice sliceSize, then we can't make slices! */
-    if uint64(sg.sliceSize) > totalBytes {
-        return nil, fmt.Errorf("Not enough bytes in the files in %v - need at least %v", dirname, sg.sliceSize)
-    }
+	/* If our total number of bytes is less than our requested slice sliceSize, then we can't make slices! */
+	if uint64(sg.sliceSize) > totalBytes {
+		return nil, fmt.Errorf("Not enough bytes in the files in %v - need at least %v", dirname, sg.sliceSize)
+	}
 
-    for i :=0; i < sg.sliceCount; i++ {
-        sg.slices[i], err = sg.loadSlice(totalBytes, dirname, infos)
-        if err != nil {
-            return nil, err
-        }
-    }
+	for i := 0; i < sg.sliceCount; i++ {
+		sg.slices[i], err = sg.loadSlice(totalBytes, dirname, infos)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-    return &sg, nil
+	return &sg, nil
 }
-
-
 
 /*
  * Load a slice if data at random from the buffer of the files in our slice directory.
  * The slice can span across multiple files: in effect we are concatenating the buffer
- * of all the files in the directory into a buffer, and then picking a random position 
+ * of all the files in the directory into a buffer, and then picking a random position
  * in that buffer to read as many bytes as we need for our slice.
  * (We don't actually do it like, obviously, but the effect is the same).
  */
 func (sg *SliceGenerator) loadSlice(totalBytes uint64, dirname string, infos []fs.FileInfo) ([]byte, error) {
-    lastStart := totalBytes - uint64(sg.sliceSize)
-    start := sg.prng.Int63n(int64(lastStart))
-    var pos int64 = 0
-    read := 0
+	lastStart := totalBytes - uint64(sg.sliceSize)
+	start := sg.prng.Int63n(int64(lastStart))
+	var pos int64 = 0
+	read := 0
 
-    result := make([]byte, sg.sliceSize)
+	result := make([]byte, sg.sliceSize)
 
-    for _, info := range infos {
-        if pos + info.Size() >= start {
-            filename := path.Join(dirname, info.Name())
-            f, err := os.Open(filename)
-            if err != nil {
-                return nil, fmt.Errorf("Unable to open %v: %v", filename, err)
-            }
+	for _, info := range infos {
+		if pos+info.Size() >= start {
+			filename := path.Join(dirname, info.Name())
+			f, err := os.Open(filename)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to open %v: %v", filename, err)
+			}
 
-            defer f.Close()
+			defer f.Close()
 
-            offset := start - pos
-            if offset < 0 {
-                offset = 0
-            }
+			offset := start - pos
+			if offset < 0 {
+				offset = 0
+			}
 
-            n, err := f.ReadAt(result[read:], offset)
-            read += n
+			n, err := f.ReadAt(result[read:], offset)
+			read += n
 
-            if read == sg.sliceSize {
-                return result, nil
-            }
+			if read == sg.sliceSize {
+				return result, nil
+			}
 
-            if err != io.EOF {
-                return nil, fmt.Errorf("Unable read %v bytes from offset %v in %v: %v", sg.sliceSize - read, offset, filename, err)
-            }
-        }
+			if err != io.EOF {
+				return nil, fmt.Errorf("Unable read %v bytes from offset %v in %v: %v", sg.sliceSize-read, offset, filename, err)
+			}
+		}
 
-        pos += info.Size()
-    }
+		pos += info.Size()
+	}
 
-    return nil, fmt.Errorf("Should never happen!")
+	return nil, fmt.Errorf("Should never happen!")
 }
-
-
 
 func (sg *SliceGenerator) Generate(size uint64, id uint64, cycle uint64, buffer *[]byte) {
-    seed := uint32(sg.prng.Int())
-    sg.generateFromSeed(size, seed, buffer)
+	seed := uint32(sg.prng.Int())
+	sg.generateFromSeed(size, seed, buffer)
 }
-
-
 
 func (sg *SliceGenerator) generateFromSeed(size uint64, seed uint32, buffer *[]byte) {
-    binary.LittleEndian.PutUint32(*buffer, seed)
-    tmp_prng := rand.New(rand.NewSource(int64(seed)))
+	binary.LittleEndian.PutUint32(*buffer, seed)
+	tmp_prng := rand.New(rand.NewSource(int64(seed)))
 
-    for start := uint64(4); start < size; start += uint64(sg.sliceSize) {
-        /* Copy does the computation of min( len(src), len(dst) ) for us, so we don't need to worry */
-        copy((*buffer)[start:], sg.slices[tmp_prng.Int63n(int64(sg.sliceCount))])
-    }
+	for start := uint64(4); start < size; start += uint64(sg.sliceSize) {
+		/* Copy does the computation of min( len(src), len(dst) ) for us, so we don't need to worry */
+		copy((*buffer)[start:], sg.slices[tmp_prng.Int63n(int64(sg.sliceCount))])
+	}
 }
-
-
 
 func (sg *SliceGenerator) Verify(size uint64, id uint64, buffer *[]byte, scratch *[]byte) error {
-    if uint64(len(*buffer)) != size {
-        return fmt.Errorf("Incorrect size: expected %v but got %v\n", size, len(*buffer))
-    }
+	if uint64(len(*buffer)) != size {
+		return fmt.Errorf("Incorrect size: expected %v but got %v\n", size, len(*buffer))
+	}
 
-    // Read the seed from the header of the payload
-    seed := binary.LittleEndian.Uint32(*buffer)
+	// Read the seed from the header of the payload
+	seed := binary.LittleEndian.Uint32(*buffer)
 
-    // Now we can generate the expected buffer to compare against.
-    sg.generateFromSeed(size, seed, scratch)
+	// Now we can generate the expected buffer to compare against.
+	sg.generateFromSeed(size, seed, scratch)
 
-    if bytes.Compare(*buffer, *scratch) != 0 {
-        return fmt.Errorf("Buffers do not match\n")
-    }
+	if bytes.Compare(*buffer, *scratch) != 0 {
+		return fmt.Errorf("Buffers do not match\n")
+	}
 
-    return nil
+	return nil
 }
-
-

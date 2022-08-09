@@ -45,203 +45,188 @@ import "time"
 
 // TCPMessageFmt - Format of TCP messages.
 type TCPMessageFmt struct {
-    ID uint8 `json:"command"`
-    IsError bool `json:"is_error,omitempty"`
-    Data interface{} `json:"data"`
+	ID      uint8       `json:"command"`
+	IsError bool        `json:"is_error,omitempty"`
+	Data    interface{} `json:"data"`
 }
-
 
 // External API.
 
 // MakeEncoderFactory - Make a factory for our default encoder.
 func MakeEncoderFactory() EncoderFactory {
-    // return MakeJSONEncoderFactory()
-    return MakeGobEncoderFactory()
+	// return MakeJSONEncoderFactory()
+	return MakeGobEncoderFactory()
 }
-
 
 // ListenTCP - Listen on the specified TCP port. New connections are reported via the given channel.
 // New connections are created by the given factory.
 func ListenTCP(address string, encoders EncoderFactory, notify chan<- *MessageConnection) (*Listener, error) {
-    listener, err := net.Listen("tcp", address)
-    if err != nil { return nil, err }    // Propagate error.
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		return nil, err
+	} // Propagate error.
 
-    fmt.Printf("Listening for TCP on %s\n", address)
+	fmt.Printf("Listening for TCP on %s\n", address)
 
-    // Kick off background Goroutine to wait for accepts.
-    go acceptTCP(listener, encoders, notify)
+	// Kick off background Goroutine to wait for accepts.
+	go acceptTCP(listener, encoders, notify)
 
-    // Wrap our TCP connection in a Listener, so we can hand it back to the caller.
-    l := Listener{listener: listener}
-    return &l, nil
+	// Wrap our TCP connection in a Listener, so we can hand it back to the caller.
+	l := Listener{listener: listener}
+	return &l, nil
 }
-
 
 // ListenTCPAll - Listen on the specified TCP port on any local address.
 // All arguments other than port are as for ListenTCP.
 func ListenTCPAll(port uint16, encoders EncoderFactory, notify chan<- *MessageConnection) (*Listener, error) {
-    address := fmt.Sprintf(":%d", port)
-    /*listener, err :=*/ return ListenTCP(address, encoders, notify)
+	address := fmt.Sprintf(":%d", port)
+	/*listener, err :=*/ return ListenTCP(address, encoders, notify)
 }
-
 
 // StopListening - Stop listening on our port and accepting new connections.
 func (me *Listener) StopListening() {
-    me.listener.Close()
+	me.listener.Close()
 }
-
 
 // Listener - Handle to a listening connection.
 type Listener struct {
-    listener net.Listener
+	listener net.Listener
 }
-
 
 // ConnectTCP - Open a TCP message connection to the given address.
 // The timeout is optional, pass to 0 for no timeout.
 func ConnectTCP(address string, encoder EncoderFactory, timeout time.Duration) (*MessageConnection, error) {
-    var dialer net.Dialer
-    if timeout != 0 {
-        dialer.Timeout = timeout
-    }
+	var dialer net.Dialer
+	if timeout != 0 {
+		dialer.Timeout = timeout
+	}
 
-    conn, err := dialer.Dial("tcp", address)
+	conn, err := dialer.Dial("tcp", address)
 
-    if err != nil {
-        return nil, fmt.Errorf("Failure to connect to %s, %v", address, err)
-    }
+	if err != nil {
+		return nil, fmt.Errorf("Failure to connect to %s, %v", address, err)
+	}
 
-    // We have a TCP connection, wrap it up in a MessageConnection.
-    return makeMessageConn(conn, encoder), nil
+	// We have a TCP connection, wrap it up in a MessageConnection.
+	return makeMessageConn(conn, encoder), nil
 }
-
 
 // Close - Close this connection.
 func (me *MessageConnection) Close() {
-    // Tell our underlying connection to close.
-    me.conn.Close()
+	// Tell our underlying connection to close.
+	me.conn.Close()
 
-    // If we have a receive channel, send nil to it.
-    if me.rxChannel != nil {
-        me.rxChannel<- nil
-    }
+	// If we have a receive channel, send nil to it.
+	if me.rxChannel != nil {
+		me.rxChannel <- nil
+	}
 }
-
 
 // RemoteIP - Report the address of the machine at the other end of this connection, in IP:port form.
 func (me *MessageConnection) RemoteIP() string {
-    return me.conn.RemoteAddr().String()
+	return me.conn.RemoteAddr().String()
 }
-
 
 // Send - Send the given message.
-func (me* MessageConnection) Send(MessageID uint8, data interface{}) error {
-    return me.encoder.Send(MessageID, data)
+func (me *MessageConnection) Send(MessageID uint8, data interface{}) error {
+	return me.encoder.Send(MessageID, data)
 }
-
 
 // Receive - Receive a single message, blocking until one is available.
 // May not be called after a receive channel has been provided.
 func (me *MessageConnection) Receive(timeout time.Duration) (ReceivedMessage, error) {
-    if me.rxChannel != nil {
-        return nil, fmt.Errorf("Cannot call Receive() on a MessageConnection that has a receive channel")
-    }
+	if me.rxChannel != nil {
+		return nil, fmt.Errorf("Cannot call Receive() on a MessageConnection that has a receive channel")
+	}
 
-    // TODO: Handle timeout.
+	// TODO: Handle timeout.
 
-    return me.encoder.Receive()
+	return me.encoder.Receive()
 }
-
 
 // ReceiveToChannel - Start receiving messages in the background and send them to the given channel.
 // Kicks off a Goroutine to handle receiving.
 // Once this has been called, messages may not be received by calling Receive() or SendReceive().
 func (me *MessageConnection) ReceiveToChannel(notify chan<- *ReceivedMessageInfo) {
-    if me.rxChannel != nil {
-        // Cannot set the receive channel twice, do nothing.
-        return
-    }
+	if me.rxChannel != nil {
+		// Cannot set the receive channel twice, do nothing.
+		return
+	}
 
-    me.rxChannel = notify
+	me.rxChannel = notify
 
-    // Kick off a Goroutine to receive messages.
-    go me.processReceives()
+	// Kick off a Goroutine to receive messages.
+	go me.processReceives()
 }
 
 // ReceivedMessageInfo - A trivial wrapper around a received message so we can send it via a channel.
 type ReceivedMessageInfo struct {
-    Message ReceivedMessage
-    Connection *MessageConnection
-    Error error // Will equal io.EOF when the connection is closed.
+	Message    ReceivedMessage
+	Connection *MessageConnection
+	Error      error // Will equal io.EOF when the connection is closed.
 }
-
 
 // MessageConnection - A message based connection.
 type MessageConnection struct {
-    conn net.Conn  // Underlying TCP connection.
-    rxChannel chan<- *ReceivedMessageInfo
-    encoder Encoder
+	conn      net.Conn // Underlying TCP connection.
+	rxChannel chan<- *ReceivedMessageInfo
+	encoder   Encoder
 }
-
 
 // Internals.
 
 // makeMessageConn - Make a message connection based on the given TCP connection.
 func makeMessageConn(conn net.Conn, encoderFactory EncoderFactory) *MessageConnection {
-    var mc MessageConnection
-    mc.conn = conn
-    mc.encoder = encoderFactory.Make(conn)
-    return &mc
+	var mc MessageConnection
+	mc.conn = conn
+	mc.encoder = encoderFactory.Make(conn)
+	return &mc
 }
-
-
 
 // acceptTCP - Accept TCP connections.
 // Only returns when accepting fails.
 // Should be called as a Goroutine.
 func acceptTCP(listener net.Listener, encoders EncoderFactory, notify chan<- *MessageConnection) {
-    // Keep going round indefinitely.
-    for {
-        // Listen for an incoming connection.
-        conn, err := listener.Accept()
-        if err != nil {
-            // Something went wrong, close connection.
-            fmt.Errorf("Error accepting: %v\n", err)
-            return
-        }
+	// Keep going round indefinitely.
+	for {
+		// Listen for an incoming connection.
+		conn, err := listener.Accept()
+		if err != nil {
+			// Something went wrong, close connection.
+			fmt.Errorf("Error accepting: %v\n", err)
+			return
+		}
 
-        notify<- makeMessageConn(conn, encoders)
-    }
+		notify <- makeMessageConn(conn, encoders)
+	}
 }
-
 
 // processReceives - Process messages received on the given connection and send them via the given channel.
 // Only returns on connection failure.
 // Should be called as a Goroutine.
 func (me *MessageConnection) processReceives() {
-    for {
-        // Try to get a packet.
-        message, err := me.encoder.Receive()
+	for {
+		// Try to get a packet.
+		message, err := me.encoder.Receive()
 
-        // TODO: Handle connection closing.
-        // TODO: Should we exit on error?
+		// TODO: Handle connection closing.
+		// TODO: Should we exit on error?
 
-        // Wrap up the message so we can put in on the channel.
-        var info ReceivedMessageInfo
-        info.Message = message
-        info.Connection = me
-        info.Error = err
+		// Wrap up the message so we can put in on the channel.
+		var info ReceivedMessageInfo
+		info.Message = message
+		info.Connection = me
+		info.Error = err
 
-        me.rxChannel<- &info
+		me.rxChannel <- &info
 
-        if err != nil {
-            // Something's gone wrong with the connection, give up and close it.
-            if err != io.EOF {
-                me.conn.Close()
-            }
+		if err != nil {
+			// Something's gone wrong with the connection, give up and close it.
+			if err != io.EOF {
+				me.conn.Close()
+			}
 
-            return
-        }
-    }
+			return
+		}
+	}
 }
-
