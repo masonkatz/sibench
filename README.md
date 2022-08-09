@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/masonkatz/sibench)](https://goreportcard.com/report/github.com/masonkatz/sibench)
+
 # sibench
 
 This is the main repository for [sibench]. `sibench` is a tool for benchmarking
