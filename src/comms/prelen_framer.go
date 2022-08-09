@@ -36,10 +36,10 @@ func (me *preLengthFramer) Send(message []byte) error {
 
     // Now we can send the header and the body.
     _, err := me.conn.Write(header[:])
-    if err != nil { return err }  // Propogate error.
+    if err != nil { return err }  // Propagate error.
 
     _, err = me.conn.Write(message)
-    if err != nil { return err }  // Propogate error.
+    if err != nil { return err }  // Propagate error.
 
     // And we're done.
     return nil
@@ -50,14 +50,14 @@ func (me *preLengthFramer) Send(message []byte) error {
 func (me *preLengthFramer) Receive() (message []byte, err error) {
     // First we need a message header, which is always 4 bytes.
     header, err := me.receiveBytes(4)
-    if err != nil { return nil, err }  // Propogate error.
+    if err != nil { return nil, err }  // Propagate error.
 
     messageLen := uint(header[0]) | (uint(header[1]) << 8) | (uint(header[2]) << 16) | (uint(header[3]) << 24)
     // TODO: Do we want to impose any limits on this length as a sanity check?
 
     // Now we can get the message body.
     message, err = me.receiveBytes(messageLen)
-    if err != nil { return nil, err }  // Propogate error.
+    if err != nil { return nil, err }  // Propagate error.
 
     // Just return the message body as is.
     return message, nil
@@ -87,7 +87,7 @@ func (me *preLengthFramer) receiveBytes(byteCount uint) (data []byte, err error)
         count, err := me.conn.Read(buffer[index:])
         //fmt.Printf("Got %d\n", count)
         if count < 0 { return nil, fmt.Errorf("TCP connection return <0 bytes (%d)", count) }
-        if err != nil { return nil, err }  // Propogate error.
+        if err != nil { return nil, err }  // Propagate error.
 
         index += uint(count)
         remaining -= uint(count)

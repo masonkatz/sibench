@@ -197,7 +197,7 @@ type Analysis struct {
     IsTotal bool
 
     /* All response times in ms */
-    ResTimeMin uint64   // The fastest reponse we had for a successful operation
+    ResTimeMin uint64   // The fastest response we had for a successful operation
     ResTimeMax uint64   // The slowest response we had for a successful operation
     ResTime95  uint64   // The response time by which 95% of our successful operations completed
     ResTimeAvg uint64   // The average response time for a successful operation

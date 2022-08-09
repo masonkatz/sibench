@@ -11,7 +11,7 @@ import "runtime"
  * Connection is the abstraction of different storage backends.  
  */
 type Connection interface {
-    /* Return the target of this conection, as a convenience for logging an so forth */
+    /* Return the target of this connection, as a convenience for logging an so forth */
     Target() string
 
     /* The manager will typically open a connection to the backend to test it, and will then

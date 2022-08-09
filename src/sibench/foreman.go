@@ -304,7 +304,7 @@ func (f *Foreman) eventLoop() {
 func (f *Foreman) handleNewTcpConnection(conn *comms.MessageConnection) {
     logger.Infof("Connection from %v\n", conn.RemoteIP())
 
-    // If we aready already have a connection then tell the new one we're busy.
+    // If we already already have a connection then tell the new one we're busy.
     if f.tcpConnection != nil {
         logger.Warnf("Rejecting connection: already busy\n");
         conn.Send(OP_Busy, nil)

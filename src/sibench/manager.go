@@ -244,7 +244,7 @@ func (m* Manager) drainStats() {
 
 /*
  * Works very much like runPhase, but this time we wait for the servers to tell us the're done,
- * rather the running for a specifed length of time.
+ * rather the running for a specified length of time.
  */
 func (m *Manager) prepare() {
     if (m.err != nil) || m.isInterrupted { return }
@@ -389,7 +389,7 @@ func (m *Manager) runPhase(secs uint64, startOp Opcode, stopOp Opcode) {
 /* 
  * Blocks until all the servers have responded with the specified opcode.
  *
- * Any unexpected opcodes recieved from the servers will cause us to error out.
+ * Any unexpected opcodes received from the servers will cause us to error out.
  * The exception to that is StatSummary messages, which can be received at any
  * time, and which are just ignored here.
  */

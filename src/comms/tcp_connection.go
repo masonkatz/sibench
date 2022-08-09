@@ -64,7 +64,7 @@ func MakeEncoderFactory() EncoderFactory {
 // New connections are created by the given factory.
 func ListenTCP(address string, encoders EncoderFactory, notify chan<- *MessageConnection) (*Listener, error) {
     listener, err := net.Listen("tcp", address)
-    if err != nil { return nil, err }    // Propogate error.
+    if err != nil { return nil, err }    // Propagate error.
 
     fmt.Printf("Listening for TCP on %s\n", address)
 
@@ -78,7 +78,7 @@ func ListenTCP(address string, encoders EncoderFactory, notify chan<- *MessageCo
 
 
 // ListenTCPAll - Listen on the specified TCP port on any local address.
-// All arguemnts other than port are as for ListenTCP.
+// All arguments other than port are as for ListenTCP.
 func ListenTCPAll(port uint16, encoders EncoderFactory, notify chan<- *MessageConnection) (*Listener, error) {
     address := fmt.Sprintf(":%d", port)
     /*listener, err :=*/ return ListenTCP(address, encoders, notify)

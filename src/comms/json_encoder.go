@@ -67,7 +67,7 @@ func (me *jsonEncoder) Receive() (ReceivedMessage, error) {
     // First get the next frame.
     messageBytes, err := me.framer.Receive()
 
-    if err != nil { return nil, err }  // Propogate error.
+    if err != nil { return nil, err }  // Propagate error.
 
     // Parse the JSON to see what message it is.
     // We only need the ID, but we parse the whole thing to ensure it's all valid JSON.
